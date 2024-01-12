@@ -5,10 +5,10 @@ import cors from "cors";
 const app = express();
 
 app.use(
-  cors({
-    origin: process.env.CORS_OROGIN,
-    credentials: true,
-  })
+    cors({
+        origin: process.env.CORS_OROGIN,
+        credentials: true,
+    })
 );
 
 app.use(express.json({ limit: "16kb" }));
