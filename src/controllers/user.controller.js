@@ -6,6 +6,7 @@ import ApiResponse from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
+// generate Access and Refresh Token....
 const generateAccessAndRefreshToken = async (userId) => {
     try {
         const user = await User.findById(userId);
@@ -24,6 +25,14 @@ const generateAccessAndRefreshToken = async (userId) => {
     }
 };
 
+// Throw error...
+const throwError = (condition, statusCode, message) => {
+    if (condition) {
+        throw new ApiError(statusCode, message);
+    }
+};
+
+// Controllers.......
 const registerUser = asyncHandler(async (req, res) => {
     // get user details from client....
     const { userName, email, fullName, password } = req.body;
@@ -107,7 +116,7 @@ const loginUser = asyncHandler(async (req, res) => {
     // password chek
     const isPasswordValid = await user.isPasswordCorrect(password);
     if (!isPasswordValid) {
-        throw new ApiError(402, "Invalid user cradentials");
+        throw new ApiError(402, "email or password is wrong");
     }
 
     // access and refresh token
@@ -139,8 +148,7 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logOutUser = asyncHandler(async (req, res) => {
-    const userId = req.user._id;
-    await User.findByIdAndUpdate(userId, { refreshToken: "" });
+    await User.findByIdAndUpdate(req.user._id, { $unset: { refreshToken: 1 } });
 
     const options = { httpOnly: true, secure: true };
     return res
@@ -152,10 +160,8 @@ const logOutUser = asyncHandler(async (req, res) => {
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
     const incomingRefreshToken =
-        req.cookie.refreshToken || req.body.refreshToken;
-    if (!incomingRefreshToken) {
-        throw new ApiError(401, "unauthorized request");
-    }
+        req.cookies.refreshToken || req.body.refreshToken;
+    throwError(!incomingRefreshToken, 401, "unauthorized request");
 
     try {
         const decodedToken = jwt.verify(
@@ -164,19 +170,14 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
         );
 
         const user = await User.findById(decodedToken?._id);
-        if (!user) {
-            throw new ApiError(401, "Invalid Refresh Token");
-        }
+        throwError(!user, 401, "Invalid Refresh Token");
+        throwError(
+            incomingRefreshToken !== user.refreshToken,
+            401,
+            "Refresh Token is expired or used"
+        );
 
-        if (incomingRefreshToken !== user?.refreshToken) {
-            throw new ApiError(401, "Refresh Token is expired or used");
-        }
-
-        const options = {
-            httpOnly: true,
-            secure: true,
-        };
-
+        const options = { httpOnly: true, secure: true };
         const { accessToken, refreshToken } =
             await generateAccessAndRefreshToken(user._id);
 
@@ -198,12 +199,11 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
 const changeCurrentPassword = asyncHandler(async (req, res) => {
     const { oldPassword, newPassword } = req.body;
+    throwError(oldPassword === newPassword, 400, "Please enter a new password");
 
     const user = await User.findById(req.user?._id);
     const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
-    if (!isPasswordCorrect) {
-        throw new ApiError(400, "Invalid old password");
-    }
+    throwError(!isPasswordCorrect, 400, "old password is incorrect");
 
     user.password = newPassword;
     await user.save({ validateBeforeSave: false });
@@ -223,7 +223,6 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
     const { fullName, email } = req.body;
-
     if (!fullName || !email) {
         throw new ApiError(400, "All fields are required");
     }
