@@ -20,11 +20,10 @@ class ApiError extends Error {
     }
 }
 
-const throwError = (condition, statusCode, message) => {
+export const throwApiError = (condition, statusCode, message) => {
     if (condition) {
         throw new ApiError(statusCode, message);
     }
 };
 
 export default ApiError;
-export { throwError };
